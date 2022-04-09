@@ -137,9 +137,11 @@ dist
 # Serverless Webpack directories
 .webpack/
 
+development.env
 # Optional stylelint cache
 
 # SvelteKit build / generate output
 .svelte-kit
 
+log/
 # End of https://www.toptal.com/developers/gitignore/api/node
