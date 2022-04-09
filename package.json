@@ -1,0 +1,26 @@
+{
+  "name": "server-signal",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "start": "cross-env NODE_ENV=development node server.js"
+  },
+  "keywords": [
+    "p2p"
+  ],
+  "author": "bakduo",
+  "license": "MIT",
+  "dependencies": {
+    "cross-env": "^7.0.3",
+    "dotenv": "^16.0.0",
+    "pino": "^7.10.0",
+    "pino-multi-stream": "^6.0.0",
+    "pino-tee": "^0.3.0",
+    "ws": "^7.3.1"
+  },
+  "optionalDependencies": {
+    "bufferutil": "^4.0.1",
+    "utf-8-validate": "^5.0.2"
+  }
+}
