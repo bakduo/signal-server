@@ -1,13 +1,13 @@
 
 /*
+* Copyright 2022 bakduo Licensed under MIT
 * Copyright 2019 bakduo Licensed under MIT
 * See license text at https://mit-license.org/license.txt
 */
-//require("./config/config.js");
 var nextID = Date.now().toString();
 const WebSocketServer = require('ws').Server;
-const { UsersRTC } = require ("./classes/usuarios");
-const { ManagerWS } = require ("./classes/managerWS");
+const { UsersRTC } = require ("./model/usuarios");
+const { ManagerWS } = require ("./model/managerWS");
 const { logger, port }= require('./config/config');
 
 const usuariosRTC=new UsersRTC();
@@ -20,20 +20,20 @@ managerWS.setNextID(nextID);
 
 managerWS.getWS().on('listening', function (){
 	//console.log("Server started with port "+port);
-  logger.info("Server started with port "+port)
+  logger.info(`Server started with port: ${port}`)
 });
 
 managerWS.getWS().on('connection', function (connection){
     
     // Accept the request and get a connection.
     if (connection.remoteAddress){
-      logger.info("Connection accepted from " + connection.remoteAddress + ".");
+      logger.debug(`Connection accepted from: ${connection.remoteAddress}`);
     }
     
     connection.on('message', function (message) {
       
-      logger.info("User connected");
-      logger.info("message from user: "+message);
+      logger.debug("User connected");
+      logger.debug(`message from user: ${message}`);
       
       var data = JSON.parse(message);
 
@@ -44,11 +44,12 @@ managerWS.getWS().on('connection', function (connection){
         if (managerWS.handler().getSupport(data.type)){
           managerWS.handler().getOperation(data.type).do(connection,data,managerWS);
         }else{
-          logger.info("Operacion no soportado por el manager: "+data.type);  
+          logger.debug(`Operation don't support: ${data.type}`);
         }
       } catch(e) {
-        logger.info("Handler de operacion desconocida: "+data.type);
+        logger.info(`Handler de operacion desconocida: ${data.type}`);
         logger.error(e);
+        throw Error(`managerWS getWS on connection ${e.message}`);
       }
       
       //si no es login entonces sera que nos llegan mensajes de los peers para interactuar.
@@ -56,27 +57,27 @@ managerWS.getWS().on('connection', function (connection){
       //if (forwarding){  
       if (managerWS.getForward()){
          if (data.target && data.target !== undefined && data.target.length !== 0){
-              logger.info("usuario: "+data.target);
+              logger.debug(`usuario: ${data.target}`);
               if (usuariosRTC.getUserByUsername(data.target).getMode()!=="manager"){
                //Debug INFO FORWARD
                switch (data.type){
                  case "candidate":
                    // statements_1
-                   logger.info("Candidate este mensaje lo envia : "+data.who+" para: "+data.target+"\n");
+                   logger.debug(`Candidate este mensaje lo envia : ${data.who} para: ${data.target}\n`);
                    break;
                  case "offer":
-                  logger.info("Offer este mensaje lo envia : "+data.who+" para: "+data.target+"\n");
+                  logger.debug(`Offer este mensaje lo envia : ${data.who} para: ${data.target}\n`);
                    break;
                  case "answer":
-                  logger.info("Answer este mensaje lo envia : "+data.who+" para: "+data.target+"\n");
+                  logger.debug(`Answer este mensaje lo envia : ${data.who} para: ${data.target}\n`);
                    break;
                }
                usuariosRTC.getUserByUsername(data.target).getSocket().send(JSON.stringify(data));
             }else{
-              logger.info("No se envian datos de ofertas de conexion a usuarios manager.");
+              logger.debug("No se envian datos de ofertas de conexion a usuarios manager.");
             }
          }else{
-          logger.info("No es forward para un usuario.\n");
+          logger.debug("No es forward para un usuario.\n");
          }
       }
 
@@ -84,11 +85,11 @@ managerWS.getWS().on('connection', function (connection){
     
     
     connection.on('login', function (message) {
-      logger.info("message from login"); 
+      logger.debug("message from login"); 
     });
     
     connection.on('close', function () {
-      logger.info("Disconnecting user");
+      logger.debug("Disconnecting user");
        managerWS.checkConnection();
     });
 });

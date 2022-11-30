@@ -1,4 +1,5 @@
 /*
+* Copyright 2022 bakduo Licensed under MIT
 * Copyright 2019 bakduo. Licensed under MIT
 * See license text at https://mit-license.org/license.txt
 */
@@ -7,25 +8,14 @@ const childProcess = require('child_process');
 const dotenv = require('dotenv');
 const stream = require('stream');
 const path = require('path');
-dotenv.config({
-  path: path.resolve('./', process.env.NODE_ENV + '.env'),
-});
-
-
-const logThrough = new stream.PassThrough();
 // Environment variables
-
 const cwd = process.cwd();
 const { env } = process;
 const logPath = cwd + '/log';
 
-const logger = require('pino')(
-  {
-    name: 'signal-server',
-    customLevels: ['error','info','debug']
-  },
-  logThrough
-);
+dotenv.config({
+  path: path.resolve(cwd + '/config/', process.env.NODE_ENV + '.env'),
+});
 
 const child = childProcess.spawn(
   process.execPath,
@@ -43,9 +33,18 @@ const child = childProcess.spawn(
   { cwd, env }
 );
 
-logThrough.pipe(child.stdin);
-//Fin logger
+const logThrough = new stream.PassThrough();
 
+logThrough.pipe(child.stdin);
+
+const logger = require('pino')(
+  {
+    name: 'signal-server',
+    customLevels: ['error','info','debug']
+  },
+  logThrough
+);
+//Fin logger
 port = process.env.PORT || 64890;
 
 module.exports = {

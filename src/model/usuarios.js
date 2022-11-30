@@ -1,4 +1,5 @@
 /*
+* Copyright 2022 bakduo Licensed under MIT
 * Copyright 2019 bakduo. Licensed under MIT
 * See license text at https://mit-license.org/license.txt
 */
@@ -56,16 +57,12 @@ class ClientWS {
     }
     
     getState(){
-        let estado=null;
-        try {
-            if (this.socket.readyState){
-                estado = this.socket.readyState;
-            }
-        }catch (error){
-            logger.error(error);
-        }finally{
-            return estado;
+
+        if (!this.socket.readyState){
+            throw Error(`Not permit without state`);    
         }
+        
+        return this.socket.readyState;
     }
 
 }
@@ -85,73 +82,73 @@ class UsersRTC {
         socketWS.setUsername(name);
         socketWS.setSocket(socket);
         socketWS.setConnected(estado);
-
         this.sockets.push(socketWS);
     }
 
-    deleteUser(username){  
-  
-        let backup_vector = this.sockets.filter(elemento=>{
-          return elemento.getUsername()!==username
+    deleteUser(username){
+
+        let backupVector = this.sockets.filter(elemento=>{
+          return (elemento.getUsername()!==username)
         });
       
-        if (backup_vector.length===this.sockets.length){
-            logger.info("No fue eliminado el usuario: "+username);
+        if (backupVector.length>0){
+            logger.debug(`Socket user delete: ${username}`);
+            this.sockets = backupVector;
+            return this.sockets;
         }
         
-        this.sockets = backup_vector;
+        return false;
       }
 
     updateUser(id,estado,mode,socket,username){
-        try {
-            
-            let userTMP = this.getUserByUsername(username);
-            this.deleteUser(username);
-            userTMP.setUsername(username)
-            userTMP.setSocket(socket);
-            userTMP.setConnected(estado);
-            userTMP.setMode(mode);
-            userTMP.setId(id);
-            this.sockets.push(userTMP);
 
-        } catch (error) {
-            logger.error(error);
+        let userTMP = this.getUserByUsername(username);
+        if (userTMP){
+            if(this.deleteUser(username)){
+                userTMP.setUsername(username)
+                userTMP.setSocket(socket);
+                userTMP.setConnected(estado);
+                userTMP.setMode(mode);
+                userTMP.setId(id);
+                this.sockets.push(userTMP);
+                return true;
+            };
+            
         }
+        return false;
     }
 
     updateMode(username,mode){
-        this.getUserByUsername(username).setMode(mode);
+        if (this.getUserByUsername(username)){
+            this.getUserByUsername(username).setMode(mode);
+            return true;
+        }
+        return false;
     }
 
     getUserByUsername(username){
 
-        /*
-        let socket = this.sockets.filter( socket => {
-            return socket.id === id;
-        })[0];
-
-        */
-        let usuario = null;
         let busqueda = this.sockets.findIndex(item => {
             return item.getUsername() === username;
         });
 
         if (busqueda>=0){
-            usuario = this.sockets[busqueda];
-        }   
-        return usuario;
+            return this.sockets[busqueda];
+        }
+
+        return false;
+        
     }
 
     getUserById(id){
-        let usuario=null;
         let busqueda = this.sockets.findIndex(item => {
             return item.getId()===id
         });
         
         if (busqueda>=0){
-            usuario = this.sockets[busqueda];
+            return this.sockets[busqueda];
         }
-        return usuario;
+        return false;
     }
 
     getUsers(){
@@ -160,15 +157,13 @@ class UsersRTC {
 
     searchUser(id){
 
-        let personaBorrada = this.getUser(id);
+        let userDeleted = this.getUserById(id);
 
-        let tmpPersonas = this.sockets.filter( socket => {
-            return socket.id != id;
-        })
+        if (userDeleted){
+            return userDeleted;
+        }
 
-        this.personas = tmpPersonas;
-
-        return personaBorrada;
+        return false;
     }
 
 }

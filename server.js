@@ -5,4 +5,4 @@
 
 const fs = require('fs');
 
-require("./server/socket.js");
+require("./src/socket.js");

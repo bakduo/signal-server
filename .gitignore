@@ -138,10 +138,12 @@ dist
 .webpack/
 
 development.env
+config/*.env
 # Optional stylelint cache
 
 # SvelteKit build / generate output
 .svelte-kit
+sample.js
 
 log/
 # End of https://www.toptal.com/developers/gitignore/api/node
