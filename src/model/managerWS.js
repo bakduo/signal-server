@@ -5,6 +5,14 @@
 */
 const { logger }= require('../config/config');
 
+const collaborates = (connection,data,manager) => {
+  return {
+    connection:(connection || null),
+    payload: (data || null),
+    manager: (manager || null),
+  }
+}
+
 class Operation {
 
   constructor(n){
@@ -19,7 +27,7 @@ class Operation {
     return this.name;
   }
 
-  do(connection,data,manager){
+  do(obj){
     logger.info("TODO.");
   }
 }
@@ -62,21 +70,24 @@ class OLogin extends Operation{
     super(n);
   }
   
-  do(connection,payload,manager){
-      const usersRTC=manager.getUsers();
-      manager.setForward(false);
-      if (!usersRTC.getUserByUsername(payload.name)){
-          logger.info(`Ingreso login ${payload.name}`);
-          manager.setNextID(Date.now().toString());
-          usersRTC.addUser(manager.getNextId(),payload.name,true,payload.mode,connection);    
-          logger.info(`Connection accepted from Usuario: ${payload.name}`);
-          usersRTC.getUserByUsername(payload.name).getSocket().send(JSON.stringify({
+  //do(connection,payload,manager){
+  do(obj){
+      const usersRTC=obj.manager.getUsers();
+      obj.manager.setForward(false);
+      if (!usersRTC.getUserByUsername(obj.payload.name)){
+          logger.info(`Ingreso login ${obj.payload.name}`);
+          obj.manager.setNextID(Date.now().toString());
+          usersRTC.addUser(obj.manager.getNextId(),obj.payload.name,true,obj.payload.mode,obj.connection);
+          logger.info(`Connection accepted from Usuario: ${obj.payload.name}`);
+          usersRTC.getUserByUsername(obj.payload.name).getSocket().send(JSON.stringify({
             'type': "login", 
             'success': true,
-            'id':manager.getNextId(),
-          'username': `${payload.name}`,
+            'id':obj.manager.getNextId(),
+          'username': `${obj.payload.name}`,
           }));
+          return true;
       }
+      return false;
   }
 }
 
@@ -86,34 +97,36 @@ class OUpdateMode extends Operation{
     super(n);
   }
   
-  do(connection,data,manager){
+  //do(connection,data,manager){
+    do(obj){
 
       //forwarding = false;
-      manager.setForward(false);
+      obj.manager.setForward(false);
       
       logger.debug("Update peer mode");
       
-      let usersRTC=manager.getUsers();
+      let usersRTC=obj.manager.getUsers();
       
-      if (!usersRTC.getUserByUsername(data.username)){
-        logger.debug(`OUpdateMode not permit work without user: ${data.username}`);
-        //throw Error(`OUpdateMode not permit work without user: ${data.username}`);
+      if (!usersRTC.getUserByUsername(obj.payload.username)){
+        logger.debug(`OUpdateMode not permit work without user: ${obj.payload.username}`);
       }
 
-      if (usersRTC.getUserByUsername(data.username)){
-        switch (data.element){
+      if (usersRTC.getUserByUsername(obj.payload.username)){
+        switch (obj.payload.element){
           case 'datachannel':
-              manager.sendBroadcastUpdateMode(data);
+            obj.manager.sendBroadcastUpdateMode(obj.payload);
           break;
           case 'extension':
-              if (usersRTC.getUserByUsername(data.username)!==null){
-                usersRTC.updateMode(data.username,data.mode);
-                manager.sendBroadcastUpdateMode(data);
+              if (usersRTC.getUserByUsername(obj.payload.username)!==null){
+                usersRTC.updateMode(obj.payload.username,obj.payload.mode);
+                obj.manager.sendBroadcastUpdateMode(obj.payload);
               }
           break
         }
-      }
+        return true;
 
+      }
+      return false;
   }
 }
 
@@ -123,20 +136,23 @@ class OReconnect extends Operation{
     super(n);
   }
   
-  do(connection,data,manager){
-      manager.setForward(false);
-      logger.debug(data);
-      let usersRTC=manager.getUsers();
-      if (!usersRTC.getUserByUsername(data.username)){
-        logger.info(`Pide reconneccion al server: ${data.clientID}`);
+  //do(connection,data,manager){
+  do(obj){
+      obj.manager.setForward(false);
+      logger.debug(obj.payload);
+      let usersRTC=obj.manager.getUsers();
+      if (!usersRTC.getUserByUsername(obj.payload.username)){
+        logger.info(`Pide reconneccion al server: ${obj.payload.clientID}`);
         //usersRTC.updateUser(data.clientID,true,data.mode,connection,data.username);
-        usersRTC.addUser(data.clientID,data.username,true,data.mode,connection);
-        usersRTC.getUserById(data.clientID).getSocket().send(JSON.stringify({
+        usersRTC.addUser(obj.payload.clientID,obj.payload.username,true,obj.payload.mode,obj.connection);
+        usersRTC.getUserById(obj.payload.clientID).getSocket().send(JSON.stringify({
           'type': "updateconnection",
-          'id': `${data.clientID}`,
+          'id': `${obj.payload.clientID}`,
         }));
+        return true;
       }else{
-        logger.info("Usuario ya existe no se puede reconectar.");
+        logger.info("User that's exist don't use reconnect");
+        return false;
       }
   }
 }
@@ -148,16 +164,16 @@ class OListUsers extends Operation{
     super(n);
   }
   
-  do(connection,data,manager){
+  //do(connection,data,manager){
+    do(obj){
+        obj.manager.setForward(false);
 
-        manager.setForward(false);
-
-        let usersRTC=manager.getUsers();
+        let usersRTC=obj.manager.getUsers();
         
-        if (usersRTC.getUsers().lenght>0){
+        if (usersRTC.getUsers().length>0){
           const listaUsuarios = usersRTC.getUsers().map((item)=>{
             if (item.getUsername()) {
-              if (client.getUsername()!=`${data.who}`){
+              if (client.getUsername()!=`${obj.payload.who}`){
                 return {
                   who:client.getUsername(),
                   id:client.getId(),
@@ -172,11 +188,14 @@ class OListUsers extends Operation{
               'usersonline': listaUsuarios,
           }));
 
+          return true;
+
         }else{
             connection.send(JSON.stringify({
               'type': "listUsers", 
               'usersonline': [],
             }));
+            return false;
         }
   }
 }
@@ -187,16 +206,18 @@ class ODelete extends Operation{
     super(n);
   }
   
-  do(connection,data,manager){
-    manager.setForward(false);
-    const usersRTC=manager.getUsers();
+  //do(connection,data,manager){
+  do(obj){
+    obj.manager.setForward(false);
+    const usersRTC=obj.manager.getUsers();
 
-    if (usersRTC.deleteUser(data.target)){
-      logger.debug(`Cerrando session del usuario: ${data.target}`);
+    if (usersRTC.deleteUser(obj.payload.target)){
+      logger.debug(`Closing session for user: ${obj.payload.target}`);
       connection.send(JSON.stringify({
-        'type': "confirmdelete",
-        'target': data.target
+        'type':"confirmdelete",
+        'target':obj.payload.target
       }));
+      return true;
     }
     return false;
   }
@@ -208,23 +229,30 @@ class OBroadcast extends Operation{
     super(n);
   }
   
-  do(connection,data,manager){    
-        manager.setForward(false);
+  //do(connection,data,manager){    
+    do(obj){
+        obj.manager.setForward(false);
 
-        let usersRTC=manager.getUsers();
+        let usersRTC=obj.manager.getUsers();
 
-        usersRTC.getUsers().forEach(item => {
-          if ((item.getId()!==data.id) && (item.getUsername()!==data.username)){
-            logger.debug(`OBroadcast append user: ${data.username}`);
-            item.getSocket().send(JSON.stringify({
-              'type': "appendUser",
-              'id': data.id,
-              'username': `${data.username}`,
-              'mode': `${data.mode}`,
-              'spec': data.spec,
-            }));
-          }
-        });
+        try {
+          usersRTC.getUsers().forEach(item => {
+            if ((item.getId()!==obj.payload.id) && (item.getUsername()!==obj.payload.username)){
+              logger.debug(`OBroadcast for append to user: ${obj.payload.username}`);
+              item.getSocket().send(JSON.stringify({
+                'type': "appendUser",
+                'id': obj.payload.id,
+                'username': `${obj.payload.username}`,
+                'mode': `${obj.payload.mode}`,
+                'spec': obj.payload.spec,
+              }));
+            }
+          });
+          return true;  
+        } catch (error) {
+          logger.debug(`OBroadcast debug: ${error.message}`);
+          return false;
+        }
   }
 }
 
@@ -233,11 +261,13 @@ class OCheckConnectionPeer extends Operation{
   constructor(n){
     super(n);
   }
-  
-  do(connection,data,manager){
+
+  //do(connection,data,manager){
+  do(obj){
     logger.debug("OCheckConnectionPeer remote command");
-    manager.setForward(false);
-    manager.checkConnection();
+    obj.manager.setForward(false);
+    obj.manager.checkConnection();
+    return true;
   }
 
 }
@@ -248,11 +278,18 @@ class OCallComand extends Operation{
     super(n);
   }
   
-  do(connection,data,manager){
-    
-      manager.setForward(false);
+  //do(connection,data,manager){
+  do(obj){
+    try {
+      obj.manager.setForward(false);
       logger.debug("OCallComand remote command");
-      manager.sendCommandtoUser(data);
+      obj.manager.sendCommandtoUser(obj.payload);
+      return true;
+    } catch (error) {
+      logger.debug(`OCallComand fail: ${error.message}`);
+      return false;
+    }
+      
   }
 }
 
@@ -262,11 +299,13 @@ class OAckSession extends Operation{
     super(n);
   }
   
-  do(connection,data,manager){
-      manager.setForward(false);
-      let usersRTC=manager.getUsers();
-      if (usersRTC.getUserByUsername(data.target)){
-        usersRTC.getUserByUsername(data.target).getSocket().send(JSON.stringify(data));
+  //do(connection,data,manager){
+  do(obj){
+      obj.manager.setForward(false);
+      let usersRTC=obj.manager.getUsers();
+      if (usersRTC.getUserByUsername(obj.payload.target)){
+        usersRTC.getUserByUsername(obj.payload.target).getSocket().send(JSON.stringify(obj.payload));
+        return true;
       }
       return false;
   }
@@ -278,16 +317,22 @@ class OToUser extends Operation{
     super(n);
   }
   
-  do(connection,data,manager){
-      manager.setForward(false);
-      let usersRTC=manager.getUsers();
-      if (usersRTC.getUserByUsername(data.target)){
-          usersRTC.getUserByUsername(data.target).getSocket().send(JSON.stringify({
+  //do(connection,data,manager){
+  do(obj){
+
+      obj.manager.setForward(false);
+
+      let usersRTC=obj.manager.getUsers();
+
+      logger.debug(`OToUser responsebroadcast: of ${obj.payload.target} to ${obj.payload.source} `);
+
+      if (usersRTC.getUserByUsername(obj.payload.target)){
+          usersRTC.getUserByUsername(obj.payload.target).getSocket().send(JSON.stringify({
             'type': "responsebroadcast",
-            'id': data.source_id,
-            'username': data.source,
-            'mode':data.mode,
-            'spec':data.spec
+            'id': obj.payload.sourceId,
+            'username': obj.payload.source,
+            'mode':obj.payload.mode,
+            'spec':obj.payload.spec
           }));
           return true;
       }
@@ -302,12 +347,18 @@ class OUpdateSession extends Operation{
     super(n);
   }
   
-  do(connection,data,manager){
-      manager.setForward(false);
-      manager.sendBroadcastUpdateSession(data);
+  //do(connection,data,manager){
+  do(obj){
+    try {
+      obj.manager.setForward(false);
+      obj.manager.sendBroadcastUpdateSession(obj.payload);
+      return true;
+    } catch (error) {
+      logger.debug(`OUpdateSession debug: ${error.message}`);
+      return false;
+    }
   }
 }
-
 
 class ManagerWS {
     
@@ -382,7 +433,7 @@ class ManagerWS {
           const mode=jsondata.mode || "";
           client.getSocket().send(JSON.stringify({
               'type': "rpc",
-              'id': dataRemote.source_id,
+              'id': dataRemote.sourceId,
               'username': dataRemote.source,
               'method': dataRemote.method,
               'data': jsondata.data,
@@ -397,11 +448,11 @@ class ManagerWS {
         let remoteUser=payload.data;
         let userConnected = this.users.getUsers();
 
-        if (userConnected.lenght>0){
+        if (userConnected.length>0){
           userConnected.forEach((item)=>{
             if (item.getId()!==remoteUser.id && item.getUsername()!=`${remoteUser.username}` && item.getUsername()!=`${remoteUser.source}`){
-              logger.debug(`Enviar update session hacia :${item.getUsername()}`);
-              item.getSocket().send(JSON.stringify(data));
+              logger.debug(`Send update session to :${item.getUsername()}`);
+              item.getSocket().send(JSON.stringify(payload));
             }
           });
         }
@@ -409,7 +460,7 @@ class ManagerWS {
 
     sendBroadcastUpdateMode(payload){
         let userConnected = this.users.getUsers();
-        if (userConnected.lenght>0){
+        if (userConnected.length>0){
           userConnected.forEach((item)=>{
             if (item.getId()!==payload.id && item.getUsername()!=`${payload.username}`){
               userConnected[i].getSocket().send(JSON.stringify({
@@ -425,7 +476,7 @@ class ManagerWS {
         
         let userConnected = this.users.getUsers();
        
-        if (userConnected.lenght>0){
+        if (userConnected.length>0){
           userConnected.forEach((item)=>{
             if (item.getId() !== payload.id && item.getUsername() !== payload.username){
               item.getSocket().send(JSON.stringify({
@@ -440,16 +491,29 @@ class ManagerWS {
         
     }
 
-    checkConnection(){
+    checkConnection(connection){
+
           let usersForDelete=[];
+          
           let userConnected = this.users.getUsers();
+
+          //logger.debug(`Socket count : ${this.ws.clients}`);
+
+          logger.debug(`Count user connected: ${userConnected.length}`);
         
-          if (userConnected.lenght>0){
+          if (userConnected.length>0){
+
             userConnected.forEach((item)=>{
+
               if (item){
-                logger.debug(item.getState());
+
+                //console.log(item);
+                
+                logger.debug(`Socket: ${item.getUsername()} ${item.getState()}`);
+
                 if ((item.getState()===null || item.getState()===undefined)){
                   //estado cerrado
+                  logger.debug(`Socket state dosen't exists ${item.getUsername()} ${item.getState()}`);
                   let deleteUser={
                     'target':item.getUsername(),
                     'id':item.getId()
@@ -460,16 +524,17 @@ class ManagerWS {
                   switch (item.getState()){
                     case 3:
                       //estado cerrado
+                      logger.debug(`Socket state closed ${item.getUsername()} ${item.getState()}`);
                       let deleteUser={
                         'target':item.getUsername(),
                         'id':item.getId()
                       }
                       usersForDelete.push(deleteUser);
                       this.sendBroadcastDelete(deleteUser);
-                      logger.debug("Estado de la conexión cerrado.");
+                      logger.debug(`State connection for user: ${deleteUser}.`);
                       break
                     case 1:
-                      logger.debug("Estado de la conexión abierto.");
+                      logger.debug(`State connection open for user: ${item.getUsername()}.`);
                       break;
                   }
                 }
@@ -484,5 +549,6 @@ class ManagerWS {
 }
 
 module.exports={
-    ManagerWS
+    ManagerWS,
+    collaborates
 }

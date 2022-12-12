@@ -113,7 +113,6 @@ class UsersRTC {
                 this.sockets.push(userTMP);
                 return true;
             };
-            
         }
         return false;
     }

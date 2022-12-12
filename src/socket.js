@@ -7,7 +7,7 @@
 var nextID = Date.now().toString();
 const WebSocketServer = require('ws').Server;
 const { UsersRTC } = require ("./model/usuarios");
-const { ManagerWS } = require ("./model/managerWS");
+const { ManagerWS,collaborates } = require ("./model/managerWS");
 const { logger, port }= require('./config/config');
 
 const usuariosRTC=new UsersRTC();
@@ -33,32 +33,39 @@ managerWS.getWS().on('connection', function (connection){
     connection.on('message', function (message) {
       
       logger.debug("User connected");
+      
       logger.debug(`message from user: ${message}`);
       
-      var data = JSON.parse(message);
+      let data = JSON.parse(message);
 
-      //console.log("datos del mensaje: "+ JSON.stringify(data));
+      console.log(`Payload del mensaje: ${JSON.stringify(data)}`);
+
       managerWS.setForward(true);
 
       try {
         if (managerWS.handler().getSupport(data.type)){
-          managerWS.handler().getOperation(data.type).do(connection,data,managerWS);
+          managerWS.handler().getOperation(data.type).do(collaborates(connection,data,managerWS));
         }else{
           logger.debug(`Operation don't support: ${data.type}`);
         }
       } catch(e) {
-        logger.info(`Handler de operacion desconocida: ${data.type}`);
-        logger.error(e);
-        throw Error(`managerWS getWS on connection ${e.message}`);
+        logger.debug(`managerWS handler getOperation debug: ${e.mesage}`);
       }
+
+      logger.debug(`Operation continue by check forward: ${data.type}`);
       
       //si no es login entonces sera que nos llegan mensajes de los peers para interactuar.
       //se garantiza que cada peer puede interactuar con el servidor hasta que esten en "pares".
       //if (forwarding){  
       if (managerWS.getForward()){
-         if (data.target && data.target !== undefined && data.target.length !== 0){
-              logger.debug(`usuario: ${data.target}`);
+         //if (data.target && data.target !== undefined && data.target.length !== 0){
+
+          if (data.target){
+
+              logger.debug(`usuario: ${data.target}: mode: ${usuariosRTC.getUserByUsername(data.target).getMode()}`);
+              
               if (usuariosRTC.getUserByUsername(data.target).getMode()!=="manager"){
+                console.log(`Data type: ${data.type}`);
                //Debug INFO FORWARD
                switch (data.type){
                  case "candidate":
@@ -80,16 +87,14 @@ managerWS.getWS().on('connection', function (connection){
           logger.debug("No es forward para un usuario.\n");
          }
       }
-
     });
     
-    
     connection.on('login', function (message) {
-      logger.debug("message from login"); 
+      logger.debug(`Login event: message from login ${message}`); 
     });
     
     connection.on('close', function () {
       logger.debug("Disconnecting user");
-       managerWS.checkConnection();
+      managerWS.checkConnection(connection);
     });
 });
