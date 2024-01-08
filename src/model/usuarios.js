@@ -73,6 +73,10 @@ class UsersRTC {
         this.sockets = [];
     }
 
+    addClient(cli){
+        this.sockets.push(cli);
+    }
+
     addUser(id,name,estado,mode,socket){
         
         let socketWS = new ClientWS();
@@ -169,5 +173,6 @@ class UsersRTC {
 
 
 module.exports = {
+    ClientWS,
     UsersRTC
 }

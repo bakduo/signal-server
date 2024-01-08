@@ -17,37 +17,60 @@ dotenv.config({
   path: path.resolve(cwd + '/config/', process.env.NODE_ENV + '.env'),
 });
 
-const child = childProcess.spawn(
-  process.execPath,
-  [
-    require.resolve('pino-tee'),
-    'warn',
-    `${logPath}/log.warn.log`,
-    'error',
-    `${logPath}/log.error.log`,
-    'info',
-    `${logPath}/log.info.log`,
-    'debug',
-    `${logPath}/log.debug.log`,
-  ],
-  { cwd, env }
-);
+mode = process.env.MODE || "testing";
 
-const logThrough = new stream.PassThrough();
+if (mode!="testing"){
 
-logThrough.pipe(child.stdin);
+  const child = childProcess.spawn(
+    process.execPath,
+    [
+      require.resolve('pino-tee'),
+      'warn',
+      `${logPath}/log.warn.log`,
+      'error',
+      `${logPath}/log.error.log`,
+      'info',
+      `${logPath}/log.info.log`,
+      'debug',
+      `${logPath}/log.debug.log`,
+    ],
+    { cwd, env }
+  );
 
-const logger = require('pino')(
-  {
-    name: 'signal-server',
-    customLevels: ['error','info','debug']
-  },
-  logThrough
-);
-//Fin logger
-port = process.env.PORT || 64890;
+  const logThrough = new stream.PassThrough();
 
-module.exports = {
-    logger,
-    port
+  logThrough.pipe(child.stdin);
+
+  const logger = require('pino')(
+    {
+      name: 'signal-server',
+      customLevels: ['error','info','debug']
+    },
+    logThrough
+  );
+
+  //Fin logger
+  port = process.env.PORT || 64890;
+
+  module.exports = {
+      logger,
+      port
+  }
+
+
+}else{
+  const logger = require('pino')(
+    {
+      name: 'signal-server',
+      customLevels: ['error','info','debug']
+    },
+  );
+
+  //Fin logger
+  port = process.env.PORT || 64890;
+
+  module.exports = {
+      logger,
+      port
+  }
 }

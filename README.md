@@ -12,6 +12,9 @@ Permit connect browser with Web Extensions. Before you need it install and confi
 ## Using
 
 ```
+
+mkdir log
+
 development.env
 
 PORT=8080
