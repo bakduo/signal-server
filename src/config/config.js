@@ -1,6 +1,5 @@
 /*
-* Copyright 2022 bakduo Licensed under MIT
-* Copyright 2019 bakduo. Licensed under MIT
+* Copyright 2024 bakduo Licensed under MIT
 * See license text at https://mit-license.org/license.txt
 */
 

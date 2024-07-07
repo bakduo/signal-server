@@ -13,6 +13,34 @@ const collaborates = (connection,data,manager) => {
   }
 }
 
+class Queue {
+  constructor() {
+      this.queue = [];
+  }
+ 
+  add(element) { // add element
+      return this.queue.push(element);
+  }
+  
+  remove() { 
+      if(this.queue.length > 0) {
+          return this.queue.shift();   // remove first element
+      }
+  }
+    
+  size(){
+      return this.queue.length;
+  }
+
+  isEmpty() {
+     return this.queue.length == 0;
+  }
+
+  clear(){
+      this.queue = [];
+  }
+}
+
 class Operation {
 
   constructor(n){
@@ -73,19 +101,45 @@ class OLogin extends Operation{
   //do(connection,payload,manager){
   do(obj){
       const usersRTC=obj.manager.getUsers();
-      obj.manager.setForward(false);
+
+      const manager = obj.manager;
+
+      manager.setForward(false);
+
       if (!usersRTC.getUserByUsername(obj.payload.name)){
+
           logger.info(`Ingreso login ${obj.payload.name}`);
-          obj.manager.setNextID(Date.now().toString());
-          usersRTC.addUser(obj.manager.getNextId(),obj.payload.name,true,obj.payload.mode,obj.connection);
+
+          manager.setNextID(Date.now().toString());
+
+          usersRTC.addUser(manager.getNextId(),obj.payload.name,true,obj.payload.mode,obj.connection,obj.payload.visible);
+
           logger.info(`Connection accepted from Usuario: ${obj.payload.name}`);
-          usersRTC.getUserByUsername(obj.payload.name).getSocket().send(JSON.stringify({
+
+          let socketClient = usersRTC.getUserByUsername(obj.payload.name).getSocket();
+
+          socketClient.send(JSON.stringify({
             'type': "login", 
             'success': true,
-            'id':obj.manager.getNextId(),
-          'username': `${obj.payload.name}`,
+            'id':manager.getNextId(),
+            'username': `${obj.payload.name}`,
+            'status':0,
           }));
           return true;
+
+      }else{
+        logger.info(`Again Ingreso login ${obj.payload.name}`);
+        let user = usersRTC.getUserByUsername(obj.payload.name);
+        user.setSocket(obj.connection);
+        usersRTC.getUserByUsername(obj.payload.name).getSocket().send(JSON.stringify({
+          'type': "login", 
+          'success': true,
+          'id':user.getId(),
+          'username': user.getUsername(),
+          'status':0,
+          'already':1,
+        }));
+        return true;
       }
       return false;
   }
@@ -148,6 +202,7 @@ class OReconnect extends Operation{
         usersRTC.getUserById(obj.payload.clientID).getSocket().send(JSON.stringify({
           'type': "updateconnection",
           'id': `${obj.payload.clientID}`,
+          'status':0,
         }));
         return true;
       }else{
@@ -156,7 +211,6 @@ class OReconnect extends Operation{
       }
   }
 }
-
 
 class OListUsers extends Operation{
 
@@ -171,37 +225,42 @@ class OListUsers extends Operation{
         let usersRTC=obj.manager.getUsers();
         
         if (usersRTC.getUsers().length>0){
-          const listaUsuarios = usersRTC.getUsers().map((item)=>{
-            if (item.getUsername()) {
-              if (client.getUsername()!=`${obj.payload.who}`){
-                return {
-                  who:client.getUsername(),
-                  id:client.getId(),
-                  mode:client.getMode(),
-                }
+
+          let listado = [];
+
+          usersRTC.getUsers().forEach((item)=>{
+            
+              if (item.getVisible()==1 && item.getUsername()!=`${obj.payload.who}`){
+
+                listado.push({
+                  who:item.getUsername(),
+                  id:item.getId(),
+                  mode:item.getMode(),
+                });
               }
-            }
           });
   
-          connection.send(JSON.stringify({
+          obj.connection.send(JSON.stringify({
               'type': "listUsers", 
-              'usersonline': listaUsuarios,
+              'usersonline': listado,
+              'status':0,
           }));
 
           return true;
 
         }else{
-            connection.send(JSON.stringify({
+          obj.connection.send(JSON.stringify({
               'type': "listUsers", 
               'usersonline': [],
-            }));
-            return false;
+              'status':0,
+          }));
+          return false;
         }
   }
 }
 
 class ODelete extends Operation{
-
+  
   constructor(n){
     super(n);
   }
@@ -215,7 +274,8 @@ class ODelete extends Operation{
       logger.debug(`Closing session for user: ${obj.payload.target}`);
       connection.send(JSON.stringify({
         'type':"confirmdelete",
-        'target':obj.payload.target
+        'target':obj.payload.target,
+        'status':0,
       }));
       return true;
     }
@@ -245,6 +305,7 @@ class OBroadcast extends Operation{
                 'username': `${obj.payload.username}`,
                 'mode': `${obj.payload.mode}`,
                 'spec': obj.payload.spec,
+                'status':0,
               }));
             }
           });
@@ -332,7 +393,8 @@ class OToUser extends Operation{
             'id': obj.payload.sourceId,
             'username': obj.payload.source,
             'mode':obj.payload.mode,
-            'spec':obj.payload.spec
+            'spec':obj.payload.spec,
+            'status':0,
           }));
           return true;
       }
@@ -360,6 +422,199 @@ class OUpdateSession extends Operation{
   }
 }
 
+class OSessionOperation extends Operation{
+
+  constructor(n){
+    super(n);
+    this.sessions = {};
+  }
+
+  //do(connection,data,manager){
+  do(obj){
+    try {
+
+      const manager = obj.manager;
+
+      manager.setForward(false);
+
+      if (obj.payload.state=="syn"){
+
+        if (!this.sessions[obj.payload.idsession]){
+
+          if (obj.payload.description){
+
+            if (obj.payload.description.type==="offer"){
+    
+              this.sessions[obj.payload.idsession] = {
+                  who: obj.payload.who,
+                  target: obj.payload.target,
+                  description : obj.payload.description,
+                  candidates: new Queue(),
+                  idsession: obj.payload.idsession,
+                  remote: {},
+              }
+    
+              const payload = {
+                who: obj.payload.who,
+                target: obj.payload.target,
+                idsession: obj.payload.idsession,
+                state:"ack",
+                type:"session",
+                remote:false,
+                answer: false,
+                feedback: false,
+              }
+
+              manager.sendPayloadByForward(obj.payload.who,payload);
+    
+            }
+          }
+
+          
+        }else{
+          if (obj.payload.state=="syn"){
+
+            if (!obj.payload.description && obj.payload.candidate){
+              const session = this.sessions[obj.payload.idsession];
+              session.candidates.add(obj.payload.candidate);
+              const payloadsession = {
+                type:"session",
+                state:"ack",
+                who: session.who,
+                target: session.target,
+                description: false,
+                idsession: session.idsession,
+                remote: true,
+                feedback: false,
+              }
+              console.log(`Seria una session para ${obj.payload.who} : ${payloadsession}`);
+              manager.sendPayloadByForward(obj.payload.who,payloadsession);
+            }else{
+
+              if (!obj.payload.description && !obj.payload.candidate){
+
+                const session = this.sessions[obj.payload.idsession]
+
+                const vector = [];
+
+                while (!session.candidates.isEmpty()){
+                  vector.push(session.candidates.remove());
+                }
+
+                const payloadsession = {
+                  type:"session",
+                  state:"syn",
+                  who: session.who,
+                  target: session.target,
+                  description: session.description,
+                  candidates: vector,
+                  idsession: session.idsession,
+                  remote: true,
+                }
+                console.log(`Seria una session para ${obj.payload.target} : ${payloadsession}`);
+                manager.sendPayloadByForward(obj.payload.target,payloadsession);
+
+              }
+              
+            }
+          }
+        }
+      }else{
+        if (obj.payload.state=="ack"){
+
+          if (this.sessions[obj.payload.idsession]){
+
+            const session = this.sessions[obj.payload.idsession];
+
+            if (obj.payload.description && !obj.payload.candidate){
+
+                session.remote = {
+                  who: obj.payload.who,
+                  target: obj.payload.target,
+                  description : obj.payload.description,
+                  candidates: new Queue(),
+                  idsession: obj.payload.idsession,
+                }
+    
+                const payload = {
+                  who: obj.payload.who,
+                  target: obj.payload.target,
+                  idsession: obj.payload.idsession,
+                  description: false,
+                  state:"syn",
+                  type:"session",
+                  remote:false,
+                  answer: false,
+                }
+    
+                manager.sendPayloadByForward(obj.payload.target,payload);
+            }else{
+
+              if (!obj.payload.description && obj.payload.candidate){
+
+                const session = this.sessions[obj.payload.idsession];
+                
+                session.remote.candidates.add(obj.payload.candidate);
+
+                const payloadsession = {
+                  type:"session",
+                  state:"syn",
+                  who: session.who,
+                  target: session.target,
+                  description: false,
+                  idsession: session.idsession,
+                  remote: true,
+                }
+
+                console.log(`Seria una session para ${obj.payload.target} : ${payloadsession}`);
+
+                manager.sendPayloadByForward(obj.payload.target,payloadsession);
+
+              }else{
+                if (!obj.payload.description && !obj.payload.candidate){
+
+                  console.log(`termino parte se sesion de ambos lados`);
+
+                  const session = this.sessions[obj.payload.idsession]
+
+                  const vector = [];
+
+                  while (!session.remote.candidates.isEmpty()){
+                    vector.push(session.remote.candidates.remove());
+                  }
+
+                  const payloadsession = {
+                    type:"session",
+                    state:"ack",
+                    who: session.who,
+                    target: session.target,
+                    description: session.remote.description,
+                    candidates: vector,
+                    idsession: session.idsession,
+                    remote: true,
+                    feedback: true,
+                  }
+                  console.log(`Seria finalizada para ${session.who} con ${session.target}: ${payloadsession}`);
+                  
+                  manager.sendPayloadByForward(session.who,payloadsession);
+
+
+                }
+              }
+            }
+
+          }
+        }
+
+      }
+      //this.getUsers().getUserByUsername(obj.payload.target).getSocket().send(JSON.stringify(obj.payload));
+    } catch (error) {
+      logger.debug(`OSessionOperation debug: ${error.message}`);
+      return false;
+    }
+  }
+}
+
 class ManagerWS {
     
     constructor(){
@@ -380,6 +635,8 @@ class ManagerWS {
         this.operations.addOperation(new OLogin("login"));
         this.operations.addOperation(new OUpdateMode("updatemode"));
         this.operations.addOperation(new OAckSession("ackSession"));
+        this.operations.addOperation(new OSessionOperation("session"));
+        
         /********Fin operaciones****************/
     }
 
@@ -437,7 +694,8 @@ class ManagerWS {
               'username': dataRemote.source,
               'method': dataRemote.method,
               'data': jsondata.data,
-              'mode':mode
+              'mode':mode,
+              'status':0
           }));
           return true;
         }
@@ -458,6 +716,56 @@ class ManagerWS {
         }
     }
 
+    sendPayloadByForward(username,payload){
+
+      try {
+
+        if (!username){
+          return false
+        }
+
+        logger.debug(`usuario: ${username}: mode: ${this.getUsers().getUserByUsername(username).getMode()}`);
+  
+        if (this.getUsers().getUserByUsername(username).getMode()!=="manager"){
+  
+         console.log(`Data type: ${payload.type}`);
+  
+         switch (payload.type){
+  
+           case "candidate":
+             // statements_1
+             logger.debug(`Candidate este mensaje lo envia : ${payload.who} para: ${payload.target}\n`);
+             break;
+           case "offer":
+            logger.debug(`Offer este mensaje lo envia : ${payload.who} para: ${payload.target}\n`);
+             break;
+           case "answer":
+            logger.debug(`Answer este mensaje lo envia : ${payload.who} para: ${payload.target}\n`);
+             break;
+           case "description":
+              logger.debug(`description este mensaje lo envia : ${payload.who} para: ${payload.target}\n`);
+            break;
+            case "polite":
+              logger.debug(`polite este mensaje lo envia : ${payload.who} para: ${payload.target}\n`);
+            break;
+            case "handshake":
+              logger.debug(`handshake este mensaje lo envia : ${payload.who} para: ${payload.target}\n`);
+            break;
+
+         }
+
+         //console.log(payload);
+  
+         this.getUsers().getUserByUsername(username).getSocket().send(JSON.stringify(payload));
+         
+         }
+        
+        } catch (error) {
+          console.log(`Error sendPayloadByForward`);
+      }
+     
+    }
+
     sendBroadcastUpdateMode(payload){
         let userConnected = this.users.getUsers();
         if (userConnected.length>0){
@@ -465,33 +773,56 @@ class ManagerWS {
             if (item.getId()!==payload.id && item.getUsername()!=`${payload.username}`){
               userConnected[i].getSocket().send(JSON.stringify({
                 'type': "updatemode",
-                'data': payload
+                'data': payload,
+                'status':0
                 }));
             }
           });
         }
     }
 
-    sendBroadcastDelete(payload){
+    // sendBroadcastDelete(payload){
         
-        let userConnected = this.users.getUsers();
+    //     let userConnected = this.users.getUsers();
        
-        if (userConnected.length>0){
-          userConnected.forEach((item)=>{
-            if (item.getId() !== payload.id && item.getUsername() !== payload.username){
-              item.getSocket().send(JSON.stringify({
-                'type': "deleteUser",
-                'id': payload.id,
-                'username': `${payload.username}`,
-                }));
-              }
-            }
-          );
-        }
+    //     if (userConnected.length>0){
+    //       userConnected.forEach((item)=>{
+    //         if (item.getId() !== payload.id && item.getUsername() !== payload.username){
+    //           item.getSocket().send(JSON.stringify({
+    //             'type': "deleteUser",
+    //             'id': payload.id,
+    //             'username': `${payload.username}`,
+    //             'status':0
+    //             }));
+    //           }
+    //         }
+    //       );
+    //     }
         
-    }
+    // }
 
-    checkConnection(connection){
+
+    sendBroadcastNotify(payload,type){
+        
+      let userConnected = this.users.getUsers();
+     
+      if (userConnected.length>0){
+        userConnected.forEach((item)=>{
+          if (item.getId() !== payload.id && item.getUsername() !== payload.username){
+            item.getSocket().send(JSON.stringify({
+              'type': type,
+              'id': payload.id,
+              'username': `${payload.username}`,
+              'status':0
+              }));
+            }
+          }
+        );
+      }
+      
+  }
+
+    checkConnection(){
 
           let usersForDelete=[];
           
@@ -515,23 +846,27 @@ class ManagerWS {
                   //estado cerrado
                   logger.debug(`Socket state dosen't exists ${item.getUsername()} ${item.getState()}`);
                   let deleteUser={
+                    'status':0,
                     'target':item.getUsername(),
                     'id':item.getId()
                   }
                   usersForDelete.push(deleteUser);
-                  this.sendBroadcastDelete(deleteUser);
+                  this.sendBroadcastNotify(deleteUser,"deleteUser");
                 }else{
                   switch (item.getState()){
                     case 3:
                       //estado cerrado
                       logger.debug(`Socket state closed ${item.getUsername()} ${item.getState()}`);
                       let deleteUser={
+                        'status':0,
+                        'notify':"offline",
                         'target':item.getUsername(),
                         'id':item.getId()
                       }
                       usersForDelete.push(deleteUser);
-                      this.sendBroadcastDelete(deleteUser);
                       logger.debug(`State connection for user: ${deleteUser}.`);
+                      this.sendBroadcastNotify(deleteUser,"notify");
+                      
                       break
                     case 1:
                       logger.debug(`State connection open for user: ${item.getUsername()}.`);

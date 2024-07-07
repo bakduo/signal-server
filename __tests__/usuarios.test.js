@@ -1,7 +1,7 @@
 
 const {ClientWS, UsersRTC} = require('../src/model/usuarios');
 
-const { Server } = require('mock-socket');
+const {WS} = require("jest-websocket-mock");
 
 const { logger }= require('../src/config/config');
 
@@ -19,7 +19,6 @@ const generateRandomString = (myLength) => {
 
 const fakeURL = 'ws://localhost:8080';
 
-const mockServer = new Server(fakeURL);
 
 describe('Test usuarios',() => {
   
@@ -30,8 +29,8 @@ describe('Test usuarios',() => {
 
     test('Test UserRTC',()=> {
 
+        const mockServer = new WS(fakeURL);
         const users =new UsersRTC();
-
         expect(users).not.toEqual(null);
 
         const c1 =new ClientWS();
@@ -44,11 +43,11 @@ describe('Test usuarios',() => {
         c1.setMode("offline");
         c2.setMode("offline");
         c3.setMode("offline");
+
         c1.setUsername(generateRandomString(10));
         c2.setUsername(generateRandomString(10));
         c3.setUsername(generateRandomString(10));
-
-        const fakeURL = 'ws://localhost:8080';
+        
         c1.setSocket(new WebSocket(fakeURL));
         c2.setSocket(new WebSocket(fakeURL));
         c3.setSocket(new WebSocket(fakeURL));
@@ -59,14 +58,39 @@ describe('Test usuarios',() => {
 
         expect(users.getUsers().length).toEqual(3);
 
-        mockServer.on('connection', socket => {
-            socket.on('message', data => { 
-                socket.send('test message from mock server');
-            });
-        });
+        mockServer.close();
+
     
-      });
-  
+    });
+
+    test('Test payload UserRTC',async ()=> {
+
+      const mockServer = new WS(fakeURL);
+      const c1 =new ClientWS();
+      c1.setId(Date.now().toString());
+      c1.setMode("online");
+      c1.setUsername(generateRandomString(10));
+      c1.setSocket(new WebSocket(fakeURL));
+
+      await mockServer.connected;
+      
+      c1.getSocket().send(JSON.stringify({
+        'type': "login", 
+        'success': true,
+        'id':c1.getId(),
+      'username': c1.getUsername(),
+      }));
+
+      await expect(mockServer).toReceiveMessage(JSON.stringify({
+        'type': "login", 
+        'success': true,
+        'id':c1.getId(),
+      'username': c1.getUsername(),
+      }));
+
+
+    });
+
   });
   
   

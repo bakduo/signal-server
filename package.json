@@ -17,6 +17,7 @@
   "dependencies": {
     "cross-env": "^7.0.3",
     "dotenv": "^16.3.1",
+    "jest-websocket-mock": "^2.5.0",
     "mock-socket": "^9.3.1",
     "pino": "^8.17.2",
     "pino-multi-stream": "^6.0.0",

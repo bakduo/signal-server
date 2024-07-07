@@ -3,11 +3,15 @@ Signal-Server NodeJS
 
 ## Summary
 
-Permit connect browser with Web Extensions. Before you need it install and configure web extension on the browser.
+Permit connect browser|vm|pc|iot|etc with support websocket.
 
 - [x] Add support pm2.
 - [x] Add support docker.
-- [x] Add support Firefox >= 90.
+- [x] Add support websocket server WS, and client: Browser, Python and JS.
+- [x] Add support logging.
+
+
+![Server signal](img/server.png)
 
 ## Using
 
