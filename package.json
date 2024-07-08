@@ -6,7 +6,12 @@
   "scripts": {
     "dev": "cross-env NODE_ENV='development' nodemon server.js",
     "start:pm2docker": "cross-env NODE_ENV='production' pm2-runtime start server.js --env production --name sserver",
-    "test-usuario": "cross-env NODE_ENV='development' jest --collectCoverage --detectOpenHandles --forceExit"
+    "test": "cross-env NODE_ENV='development' jest --collectCoverage --detectOpenHandles --forceExit",
+    "checklint": "eslint .",
+    "fixlint": "eslint --fix .",
+    "formatcheck": "prettier . --check",
+    "doformat": "prettier . --write",
+    "prepare": "husky"
   },
   "keywords": [
     "p2p",
@@ -29,7 +34,17 @@
     "utf-8-validate": "^6.0.3"
   },
   "devDependencies": {
+    "@eslint/js": "^9.6.0",
+    "eslint": "^9.6.0",
+    "globals": "^15.8.0",
+    "husky": "^9.0.11",
     "jest": "^29.7.0",
-    "nodemon": "^3.0.2"
+    "lint-staged": "^15.2.7",
+    "nodemon": "^3.0.2",
+    "prettier": "3.3.2"
+  },
+  "eslint": "~3.1.0",
+  "lint-staged": {
+    "**/*": "prettier --write --ignore-unknown"
   }
 }

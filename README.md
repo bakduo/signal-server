@@ -1,5 +1,4 @@
-Signal-Server NodeJS
-----------
+## Signal-Server NodeJS
 
 ## Summary
 
@@ -9,7 +8,6 @@ Permit connect browser|vm|pc|iot|etc with support websocket.
 - [x] Add support docker.
 - [x] Add support websocket server WS, and client: Browser, Python and JS.
 - [x] Add support logging.
-
 
 ![Server signal](img/server.png)
 
